@@ -4,6 +4,7 @@ the same image runs on a laptop at the venue or a managed host."""
 from __future__ import annotations
 
 from functools import lru_cache
+from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -17,6 +18,38 @@ MIN_SECRET_BYTES = 32
 
 class InsecureConfiguration(RuntimeError):
     """Raised when the app would start with unsafe production settings."""
+
+
+def _query_value(url: str, key: str) -> str | None:
+    query = urlsplit(url).query
+    for name, value in parse_qsl(query, keep_blank_values=True):
+        if name == key:
+            return value
+    return None
+
+
+def _ssl_mode(url: str) -> str | None:
+    """Translate libpq's `sslmode` into asyncpg's `ssl`.
+
+    `disable` has no asyncpg equivalent worth expressing — dropping the
+    parameter entirely is the same thing. Everything else asks for TLS, and
+    asyncpg's `require` is the closest honest mapping: it encrypts but does not
+    verify the server certificate, which is what libpq's `require` also does.
+    """
+    mode = _query_value(url, "sslmode") or _query_value(url, "ssl")
+    if mode in (None, "disable", "allow"):
+        return None
+    return "require" if mode in ("require", "prefer") else mode
+
+
+def _rewrite_query(url: str, *, drop: tuple[str, ...], add: dict[str, str | None]) -> str:
+    parts = urlsplit(url)
+    params = [
+        (k, v) for k, v in parse_qsl(parts.query, keep_blank_values=True)
+        if k not in drop
+    ]
+    params += [(k, v) for k, v in add.items() if v is not None]
+    return urlunsplit(parts._replace(query=urlencode(params)))
 
 
 class Settings(BaseSettings):
@@ -68,16 +101,31 @@ class Settings(BaseSettings):
     def _normalise_database_url(cls, value: str) -> str:
         """Accept the URL forms managed hosts actually hand out.
 
-        Render, Heroku, Neon and friends inject `postgres://…` or
-        `postgresql://…`, neither of which names an async driver — SQLAlchemy
-        would try psycopg2 and fail at startup with a confusing error. Rewrite
-        to asyncpg so the platform's own value can be pasted in unedited.
+        Two incompatibilities to absorb, so a platform's own connection string
+        can be pasted in unedited:
+
+        1. Render, Heroku and Neon give `postgres://…` or `postgresql://…`.
+           Neither names an async driver, so SQLAlchemy reaches for psycopg2 and
+           dies at startup.
+        2. Neon appends `?sslmode=require&channel_binding=require`. Those are
+           libpq options — asyncpg rejects them outright with
+           "connect() got an unexpected keyword argument 'sslmode'". asyncpg
+           spells the same thing `ssl=require`.
         """
         if value.startswith("postgres://"):
-            return "postgresql+asyncpg://" + value[len("postgres://"):]
-        if value.startswith("postgresql://"):
-            return "postgresql+asyncpg://" + value[len("postgresql://"):]
-        return value
+            value = "postgresql+asyncpg://" + value[len("postgres://"):]
+        elif value.startswith("postgresql://"):
+            value = "postgresql+asyncpg://" + value[len("postgresql://"):]
+
+        if "+asyncpg" not in value:
+            return value
+        # `ssl` is dropped too, not just the libpq spellings: normalising an
+        # already-normalised URL would otherwise append a duplicate.
+        return _rewrite_query(
+            value,
+            drop=("sslmode", "channel_binding", "ssl"),
+            add={"ssl": _ssl_mode(value)},
+        )
 
     @property
     def is_postgres(self) -> bool:
@@ -85,11 +133,22 @@ class Settings(BaseSettings):
 
     @property
     def sync_database_url(self) -> str:
-        """The same database through a synchronous driver, for Alembic."""
-        return (
+        """The same database through a synchronous driver, for Alembic.
+
+        psycopg wants `sslmode`, which is exactly the parameter the async URL
+        had to drop — so translate back rather than passing asyncpg's spelling
+        to a driver that has never heard of it.
+        """
+        url = (
             self.database_url
             .replace("postgresql+asyncpg://", "postgresql+psycopg://")
             .replace("sqlite+aiosqlite://", "sqlite://")
+        )
+        if "+psycopg" not in url:
+            return url
+        mode = _query_value(self.database_url, "ssl")
+        return _rewrite_query(
+            url, drop=("ssl",), add={"sslmode": mode} if mode else {}
         )
 
     def assert_production_safe(self) -> None:

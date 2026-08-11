@@ -1,13 +1,13 @@
-# Render blueprint: one web service + one Postgres, both on free tiers.
+# Render blueprint: one free web service, backed by an external Postgres.
 #
-# Deploy with:  https://render.com/deploy  (or Dashboard -> New -> Blueprint)
-# pointed at this repository.
+# Deploy: Render Dashboard -> New -> Blueprint -> pick this repository.
 #
-# Two things to know about the free tier:
-#   * The service sleeps after 15 minutes idle. The next request wakes it and
-#     takes roughly 30-60 seconds. Fine for friends testing; not for an event.
-#   * Free Postgres instances are removed after 30 days. Move to a paid
-#     instance, or to a free Neon database, before running anything real.
+# The database is deliberately NOT provisioned here. Render's free Postgres is
+# deleted after 30 days, which is a bad surprise for anything you want to keep.
+# Point KP_DATABASE_URL at a free Neon database instead — see README.
+#
+# Free-tier caveat that remains: the service sleeps after 15 minutes idle, and
+# the next request takes 30-60 seconds to wake it.
 
 services:
   - type: web
@@ -22,19 +22,16 @@ services:
       # Render generates a strong value; the app refuses to boot without one.
       - key: KP_SECRET_KEY
         generateValue: true
+
+      # sync: false means "prompt me for this, do not store it in the repo".
+      # Paste the Neon pooled connection string here when Render asks.
       - key: KP_DATABASE_URL
-        fromDatabase:
-          name: kitchen-pass-db
-          property: connectionString
+        sync: false
+
       - key: KP_DEBUG
         value: "false"
-      # Loads the demo tournament on first boot only, so friends have something
-      # to click. It never overwrites data that already exists.
+
+      # Loads the demo tournament on first boot only, into an empty database.
+      # Set to "false" once real data exists and you no longer want the demo.
       - key: KP_SEED_ON_START
         value: "true"
-
-databases:
-  - name: kitchen-pass-db
-    plan: free
-    region: oregon
-    postgresMajorVersion: "16"

@@ -39,21 +39,35 @@ the frontend** — one service, one URL, no CORS, same-origin WebSockets. That i
 what makes a free tier workable. The container migrates itself on startup, so
 there is no release phase to configure.
 
-### Render (free)
+### Neon for the database, Render for the app (both free)
 
-`render.yaml` is a blueprint: Dashboard → **New → Blueprint** → pick this repo.
-It provisions a free web service plus a free Postgres, generates `KP_SECRET_KEY`
-for you, and sets `KP_SEED_ON_START=true` so the demo tournament is there on
-first boot.
+Render's own free Postgres is deleted after 30 days, so the database lives on
+Neon instead, whose free tier persists.
 
-Two limits of the free tier, neither of which is a bug:
+**1. Neon.** Sign up at [neon.tech](https://neon.tech), create a project, and
+copy the **pooled** connection string from the dashboard. It looks like:
 
-- The service **sleeps after 15 minutes idle**; the next request wakes it and
-  takes roughly 30–60 seconds. Fine for friends poking at it, not for a real
-  event — and worth warning testers about, or they will think it is broken.
-- Free Postgres instances are **removed after 30 days**. Point
-  `KP_DATABASE_URL` at a free [Neon](https://neon.tech) database instead if you
-  want it to persist.
+```
+postgresql://user:pass@ep-xxx-pooler.region.aws.neon.tech/neondb?sslmode=require
+```
+
+Take the *pooled* one (the host contains `-pooler`). Neon closes idle direct
+connections, and a free web service that sleeps and wakes will otherwise trip
+over dead connections in the pool.
+
+**2. Render.** Dashboard → **New → Blueprint** → pick this repo. `render.yaml`
+asks for one value, `KP_DATABASE_URL` — paste the Neon string unedited. Render
+generates `KP_SECRET_KEY` itself and turns on first-boot seeding.
+
+Paste it *unedited*: the app rewrites `postgresql://` to the async driver and
+translates `sslmode`/`channel_binding` into asyncpg's `ssl`, because asyncpg
+rejects the libpq spellings with `connect() got an unexpected keyword argument
+'sslmode'`. Alembic gets the reverse translation, since psycopg wants `sslmode`
+back. `tests/test_config.py` pins every one of those forms.
+
+The remaining free-tier limit is not a bug: the service **sleeps after 15
+minutes idle**, and the next request takes 30–60 seconds to wake it. Worth
+warning testers about, or they will assume it is broken.
 
 ### Anywhere else that runs a container
 
@@ -121,7 +135,7 @@ conformance/
 ## Testing
 
 ```bash
-cd server && uv run pytest              # 317 tests
+cd server && uv run pytest              # 333 tests
 cd server && uv run ruff check . && uv run mypy
 cd web    && npx vitest run             # 24 tests
 cd web    && npx tsc --noEmit
@@ -261,6 +275,9 @@ a volunteer scorekeeper needs no account.
 - **The Playwright suite has not been executed here** — Chromium would not
   download in this environment. The specs in `web/e2e/` are written and include
   the offline/reconnect convergence test; run `npm run e2e` with the stack up.
-- **No Postgres run yet.** Everything was verified on SQLite.
+- **Nothing has run against a real Postgres.** The URL handling for every form
+  Neon and Render hand out is unit-tested, and the schema uses no
+  Postgres-specific types, but the first real connection will happen on your
+  deploy. If it fails, the logs will say so at startup rather than mid-event.
 - Deferred by design: DUPR/Elo ratings, open-play rotation and ladders, payments
   and entry fees, PDF bracket sheets (CSV export is in), and push notifications.
