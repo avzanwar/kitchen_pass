@@ -1,0 +1,199 @@
+/*
+ * Styles for screens the prototype did not have: auth, divisions, the court
+ * board, the public view, and the offline/sync indicators. Uses the same
+ * custom properties as kitchen-pass.css so the two read as one design.
+ */
+
+.auth-form {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 100%;
+  margin: 4px 0 14px;
+}
+
+.topbar-right {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.chip-offline,
+.chip-pending {
+  font-size: 11px;
+  font-weight: 700;
+  padding: 3px 8px;
+  border-radius: 999px;
+  letter-spacing: 0.02em;
+}
+.chip-offline { background: #fdece4; color: #b4491f; }
+.chip-pending { background: #eaf4f1; color: var(--A); }
+
+/* ---- sync banners on the scoring screen ---- */
+.sync-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 8px 12px;
+  border-radius: 10px;
+  font-size: 13px;
+  font-weight: 600;
+  margin: 0 0 10px;
+}
+.sync-bar.offline { background: #fdece4; color: #a8431c; }
+.sync-bar.syncing { background: #eaf4f1; color: #0b5f52; }
+.sync-bar.warn { background: #fff4d6; color: #7a5600; align-items: flex-start; }
+.sync-bar b { font-weight: 800; }
+
+.games-won-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  padding: 0 4px 8px;
+  font-size: 13px;
+  color: var(--muted);
+}
+.games-won-row b { font-size: 16px; color: var(--ink); font-family: var(--font-d); }
+
+.game-strip {
+  display: flex;
+  gap: 6px;
+  justify-content: center;
+  flex-wrap: wrap;
+  margin: 8px 0 4px;
+}
+.game-pill {
+  background: #eef1ea;
+  border-radius: 8px;
+  padding: 3px 9px;
+  font-size: 13px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.ghost-back {
+  margin-right: 2px;
+}
+
+/* ---- divisions & draws ---- */
+.draw-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+.draw-cell {
+  border: 1px solid var(--line);
+  background: var(--card);
+  border-radius: 10px;
+  padding: 10px 8px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  text-align: center;
+  color: var(--ink);
+}
+.draw-cell.on {
+  border-color: var(--A);
+  background: #eaf4f1;
+  color: var(--A);
+}
+
+.rating-tag {
+  font-style: normal;
+  font-size: 11px;
+  font-weight: 700;
+  margin-left: 6px;
+  padding: 2px 6px;
+  border-radius: 6px;
+  background: #eef1ea;
+  color: var(--muted);
+}
+
+.entry-avatars { display: flex; gap: 4px; margin-left: auto; margin-right: 6px; }
+.muted-row { opacity: 0.55; }
+
+.pick-cell { position: relative; }
+.pick-cell.on { outline: 2px solid var(--A); border-radius: 12px; }
+.pick-order {
+  position: absolute;
+  top: 2px;
+  right: 6px;
+  background: var(--A);
+  color: #fff;
+  border-radius: 999px;
+  width: 18px;
+  height: 18px;
+  font-size: 11px;
+  display: grid;
+  place-items: center;
+}
+
+/* ---- court board ---- */
+.court-card {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 12px;
+  margin-bottom: 10px;
+  box-shadow: var(--shadow);
+}
+.court-card-head {
+  font-family: var(--font-d);
+  font-weight: 800;
+  font-size: 14px;
+  margin-bottom: 8px;
+}
+.court-match {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px;
+  border-radius: 10px;
+  background: #f7f9f5;
+  text-decoration: none;
+  color: inherit;
+  margin-bottom: 6px;
+}
+.court-match-teams { font-weight: 600; font-size: 14px; }
+.court-match-teams em { font-style: normal; color: var(--muted); margin: 0 4px; }
+.court-match-meta { font-size: 12px; color: var(--muted); }
+
+/* ---- public view ---- */
+.public-head {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 6px;
+}
+.live-badge {
+  align-self: flex-start;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: #eef1ea;
+  color: var(--muted);
+}
+.live-badge.on { background: #e5f6ea; color: #16794a; }
+
+.share-chip {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: var(--card);
+  border: 1px solid var(--line);
+  text-decoration: none;
+  color: var(--ink);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.export-row { display: flex; gap: 8px; margin-top: 12px; }
+.export-row .btn { text-decoration: none; }
+
+.tab-static { opacity: 0.6; pointer-events: none; }
+.center { text-align: center; }

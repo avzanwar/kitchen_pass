@@ -1,0 +1,55 @@
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: kitchenpass
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-kitchenpass}
+      POSTGRES_DB: kitchenpass
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U kitchenpass"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  api:
+    build:
+      context: ./server
+      dockerfile: ../Dockerfile.api
+    environment:
+      KP_DATABASE_URL: postgresql+asyncpg://kitchenpass:${POSTGRES_PASSWORD:-kitchenpass}@db:5432/kitchenpass
+      # Multiple workers need Redis to fan WebSocket updates out between them.
+      KP_REDIS_URL: redis://redis:6379/0
+      KP_SECRET_KEY: ${KP_SECRET_KEY:?set KP_SECRET_KEY (openssl rand -hex 32)}
+      KP_DEBUG: "false"
+      KP_CORS_ORIGINS: ${KP_CORS_ORIGINS:-http://localhost:8080}
+    depends_on:
+      db: { condition: service_healthy }
+      redis: { condition: service_healthy }
+    # Migrations run before the app starts, so a fresh volume comes up working.
+    command: >
+      sh -c "alembic upgrade head &&
+             uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 2"
+    expose:
+      - "8000"
+
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile.web
+    depends_on:
+      - api
+    ports:
+      - "${WEB_PORT:-8080}:80"
+
+volumes:
+  pgdata:
