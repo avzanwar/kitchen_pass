@@ -18,7 +18,7 @@ from sqlmodel import SQLModel
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from app.core.config import Settings, get_settings
-from app.core.db import get_session
+from app.core.db import _enforce_sqlite_foreign_keys, get_session
 from app.main import create_app
 
 
@@ -31,6 +31,9 @@ async def engine() -> AsyncIterator:
         connect_args={"check_same_thread": False},
         poolclass=StaticPool,
     )
+    # Match production: without this SQLite ignores foreign keys entirely, and
+    # a cascade that Postgres refuses passes here unnoticed.
+    _enforce_sqlite_foreign_keys(eng)
     async with eng.begin() as conn:
         await conn.run_sync(SQLModel.metadata.create_all)
     yield eng

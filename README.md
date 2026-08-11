@@ -87,6 +87,26 @@ because the bare forms otherwise fail at startup looking for psycopg2.
 ASGI, and the live scoreboard needs WebSockets, which that tier cannot do at
 all.
 
+### Verified on real Postgres
+
+Migrations, seeding, and a 33-check end-to-end pass (draws for all four formats,
+scoring a full match, bracket advancement, standings, public view, CSV export,
+SPA routing) all run green against a live Neon database — not just SQLite.
+
+Two bugs only Postgres could reveal were found and fixed doing that:
+
+- **Timestamps were naive.** `utcnow()` produces timezone-aware datetimes;
+  SQLite stores those in a plain TIMESTAMP without complaint, Postgres rejects
+  the insert. The columns are TIMESTAMPTZ now.
+- **Deleting a tournament returned 500.** Matches reference entries through a
+  bare column rather than a relationship, so SQLAlchemy could not order the
+  child deletes. Ownership edges now cascade in the database (11 of them) and
+  soft references null out (8), which the ORM cannot get wrong.
+
+SQLite hid the second one completely, because it ignores foreign keys unless
+asked. The app and the test fixtures now set `PRAGMA foreign_keys=ON`, so that
+class of bug fails locally instead of in production.
+
 ### Seeding is first-boot only
 
 `KP_SEED_ON_START=true` loads the demo tournament **only into an empty
@@ -135,7 +155,7 @@ conformance/
 ## Testing
 
 ```bash
-cd server && uv run pytest              # 333 tests
+cd server && uv run pytest              # 337 tests
 cd server && uv run ruff check . && uv run mypy
 cd web    && npx vitest run             # 24 tests
 cd web    && npx tsc --noEmit
@@ -275,9 +295,5 @@ a volunteer scorekeeper needs no account.
 - **The Playwright suite has not been executed here** — Chromium would not
   download in this environment. The specs in `web/e2e/` are written and include
   the offline/reconnect convergence test; run `npm run e2e` with the stack up.
-- **Nothing has run against a real Postgres.** The URL handling for every form
-  Neon and Render hand out is unit-tested, and the schema uses no
-  Postgres-specific types, but the first real connection will happen on your
-  deploy. If it fails, the logs will say so at startup rather than mid-event.
 - Deferred by design: DUPR/Elo ratings, open-play rotation and ladders, payments
   and entry fees, PDF bracket sheets (CSV export is in), and push notifications.

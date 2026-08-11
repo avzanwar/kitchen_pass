@@ -36,6 +36,18 @@ def json_column(*, nullable: bool = True) -> sa.Column:  # type: ignore[type-arg
     )
 
 
+def utc_timestamp_column(*, nullable: bool = False) -> sa.Column:  # type: ignore[type-arg]
+    """A timezone-aware timestamp column.
+
+    `utcnow()` produces aware datetimes. SQLite stores them happily in a plain
+    TIMESTAMP, but Postgres refuses with "can't subtract offset-naive and
+    offset-aware datetimes" — so the column has to be TIMESTAMPTZ, not the
+    default TIMESTAMP WITHOUT TIME ZONE. A fresh Column each call, as with
+    `json_column`.
+    """
+    return sa.Column(sa.DateTime(timezone=True), nullable=nullable)
+
+
 def new_id() -> str:
     return uuid4().hex
 
@@ -111,7 +123,9 @@ class User(SQLModel, table=True):
     display_name: str = ""
     role: Role = Field(default=Role.ORGANIZER)
     is_active: bool = True
-    created_at: datetime = Field(default_factory=utcnow)
+    created_at: datetime = Field(
+        default_factory=utcnow, sa_column=utc_timestamp_column()
+    )
 
 
 class Player(SQLModel, table=True):
@@ -125,9 +139,15 @@ class Player(SQLModel, table=True):
     #: DUPR or club rating, when known. Used for seeding.
     rating: float | None = None
     #: Set when this player has an account of their own.
-    user_id: str | None = Field(default=None, foreign_key="users.id", index=True)
-    owner_id: str | None = Field(default=None, foreign_key="users.id", index=True)
-    created_at: datetime = Field(default_factory=utcnow)
+    user_id: str | None = Field(
+        default=None, foreign_key="users.id", ondelete="SET NULL", index=True
+    )
+    owner_id: str | None = Field(
+        default=None, foreign_key="users.id", ondelete="CASCADE", index=True
+    )
+    created_at: datetime = Field(
+        default_factory=utcnow, sa_column=utc_timestamp_column()
+    )
 
 
 class Tournament(SQLModel, table=True):
@@ -136,22 +156,30 @@ class Tournament(SQLModel, table=True):
     id: str = Field(default_factory=new_id, primary_key=True)
     name: str
     slug: str = Field(index=True, unique=True)
-    owner_id: str = Field(foreign_key="users.id", index=True)
+    owner_id: str = Field(foreign_key="users.id", ondelete="CASCADE", index=True)
     starts_on: str | None = None
     ends_on: str | None = None
     timezone: str = "UTC"
     status: TournamentStatus = Field(default=TournamentStatus.DRAFT)
     #: Unguessable token behind the public read-only standings page.
     public_token: str = Field(default_factory=new_id, index=True, unique=True)
-    created_at: datetime = Field(default_factory=utcnow)
+    created_at: datetime = Field(
+        default_factory=utcnow, sa_column=utc_timestamp_column()
+    )
 
     divisions: list["Division"] = Relationship(
         back_populates="tournament",
-        sa_relationship_kwargs={"cascade": "all, delete-orphan"},
+        sa_relationship_kwargs={
+            "cascade": "all, delete-orphan",
+            "passive_deletes": True,
+        },
     )
     courts: list["Court"] = Relationship(
         back_populates="tournament",
-        sa_relationship_kwargs={"cascade": "all, delete-orphan"},
+        sa_relationship_kwargs={
+            "cascade": "all, delete-orphan",
+            "passive_deletes": True,
+        },
     )
 
 
@@ -159,7 +187,9 @@ class Court(SQLModel, table=True):
     __tablename__ = "courts"
 
     id: str = Field(default_factory=new_id, primary_key=True)
-    tournament_id: str = Field(foreign_key="tournaments.id", index=True)
+    tournament_id: str = Field(
+        foreign_key="tournaments.id", ondelete="CASCADE", index=True
+    )
     name: str
     status: CourtStatus = Field(default=CourtStatus.OPEN)
     sort_order: int = 0
@@ -171,7 +201,9 @@ class Division(SQLModel, table=True):
     __tablename__ = "divisions"
 
     id: str = Field(default_factory=new_id, primary_key=True)
-    tournament_id: str = Field(foreign_key="tournaments.id", index=True)
+    tournament_id: str = Field(
+        foreign_key="tournaments.id", ondelete="CASCADE", index=True
+    )
     name: str
     format: DivisionFormat = Field(default=DivisionFormat.DOUBLES)
     skill_bracket: str | None = None
@@ -195,11 +227,17 @@ class Division(SQLModel, table=True):
     tournament: Tournament | None = Relationship(back_populates="divisions")
     entries: list["Entry"] = Relationship(
         back_populates="division",
-        sa_relationship_kwargs={"cascade": "all, delete-orphan"},
+        sa_relationship_kwargs={
+            "cascade": "all, delete-orphan",
+            "passive_deletes": True,
+        },
     )
     matches: list["Match"] = Relationship(
         back_populates="division",
-        sa_relationship_kwargs={"cascade": "all, delete-orphan"},
+        sa_relationship_kwargs={
+            "cascade": "all, delete-orphan",
+            "passive_deletes": True,
+        },
     )
 
 
@@ -210,8 +248,10 @@ class EntryPlayer(SQLModel, table=True):
 
     __tablename__ = "entry_players"
 
-    entry_id: str = Field(foreign_key="entries.id", primary_key=True)
-    player_id: str = Field(foreign_key="players.id", primary_key=True)
+    entry_id: str = Field(foreign_key="entries.id", ondelete="CASCADE", primary_key=True)
+    player_id: str = Field(
+        foreign_key="players.id", ondelete="CASCADE", primary_key=True
+    )
     position: int = 0
 
 
@@ -219,11 +259,15 @@ class Entry(SQLModel, table=True):
     __tablename__ = "entries"
 
     id: str = Field(default_factory=new_id, primary_key=True)
-    division_id: str = Field(foreign_key="divisions.id", index=True)
+    division_id: str = Field(
+        foreign_key="divisions.id", ondelete="CASCADE", index=True
+    )
     name: str
     seed: int | None = None
     status: EntryStatus = Field(default=EntryStatus.REGISTERED)
-    created_at: datetime = Field(default_factory=utcnow)
+    created_at: datetime = Field(
+        default_factory=utcnow, sa_column=utc_timestamp_column()
+    )
 
     division: Division | None = Relationship(back_populates="entries")
     players: list[Player] = Relationship(link_model=EntryPlayer)
@@ -233,7 +277,9 @@ class Stage(SQLModel, table=True):
     __tablename__ = "stages"
 
     id: str = Field(default_factory=new_id, primary_key=True)
-    division_id: str = Field(foreign_key="divisions.id", index=True)
+    division_id: str = Field(
+        foreign_key="divisions.id", ondelete="CASCADE", index=True
+    )
     kind: str
     ordinal: int = 0
     #: Pool label -> entry ids, when this stage is pool play.
@@ -249,8 +295,12 @@ class Match(SQLModel, table=True):
     )
 
     id: str = Field(default_factory=new_id, primary_key=True)
-    division_id: str = Field(foreign_key="divisions.id", index=True)
-    stage_id: str | None = Field(default=None, foreign_key="stages.id", index=True)
+    division_id: str = Field(
+        foreign_key="divisions.id", ondelete="CASCADE", index=True
+    )
+    stage_id: str | None = Field(
+        default=None, foreign_key="stages.id", ondelete="SET NULL", index=True
+    )
 
     #: Id from the generated draw ("W-R1-M3"), unique within the division. This
     #: is what source references point at.
@@ -263,32 +313,51 @@ class Match(SQLModel, table=True):
     conditional: bool = False
     decides_title: bool = False
 
-    entry_a_id: str | None = Field(default=None, foreign_key="entries.id")
-    entry_b_id: str | None = Field(default=None, foreign_key="entries.id")
+    entry_a_id: str | None = Field(
+        default=None, foreign_key="entries.id", ondelete="SET NULL"
+    )
+    entry_b_id: str | None = Field(
+        default=None, foreign_key="entries.id", ondelete="SET NULL"
+    )
     #: Unresolved slot references, as emitted by the draw generator.
     source_a: dict[str, Any] | None = Field(default=None, sa_column=json_column())
     source_b: dict[str, Any] | None = Field(default=None, sa_column=json_column())
     bye_a: bool = False
     bye_b: bool = False
 
-    court_id: str | None = Field(default=None, foreign_key="courts.id", index=True)
-    scheduled_at: datetime | None = None
+    court_id: str | None = Field(
+        default=None, foreign_key="courts.id", ondelete="SET NULL", index=True
+    )
+    scheduled_at: datetime | None = Field(
+        default=None, sa_column=utc_timestamp_column(nullable=True)
+    )
     status: MatchStatus = Field(default=MatchStatus.PENDING, index=True)
-    winner_entry_id: str | None = Field(default=None, foreign_key="entries.id")
+    winner_entry_id: str | None = Field(
+        default=None, foreign_key="entries.id", ondelete="SET NULL"
+    )
 
     #: Exactly one device holds a match at a time. Turning a distributed merge
     #: problem into a lease is what lets the offline client stay simple.
-    scorekeeper_id: str | None = Field(default=None, foreign_key="users.id")
-    lease_expires_at: datetime | None = None
+    scorekeeper_id: str | None = Field(
+        default=None, foreign_key="users.id", ondelete="SET NULL"
+    )
+    lease_expires_at: datetime | None = Field(
+        default=None, sa_column=utc_timestamp_column(nullable=True)
+    )
 
     #: Who serves first, decided by the coin toss before the match starts.
     first_server: str = "A"
-    created_at: datetime = Field(default_factory=utcnow)
+    created_at: datetime = Field(
+        default_factory=utcnow, sa_column=utc_timestamp_column()
+    )
 
     division: Division | None = Relationship(back_populates="matches")
     games: list["Game"] = Relationship(
         back_populates="match",
-        sa_relationship_kwargs={"cascade": "all, delete-orphan"},
+        sa_relationship_kwargs={
+            "cascade": "all, delete-orphan",
+            "passive_deletes": True,
+        },
     )
 
 
@@ -306,7 +375,7 @@ class Game(SQLModel, table=True):
     )
 
     id: str = Field(default_factory=new_id, primary_key=True)
-    match_id: str = Field(foreign_key="matches.id", index=True)
+    match_id: str = Field(foreign_key="matches.id", ondelete="CASCADE", index=True)
     game_number: int
     target: int
     score_a: int = 0
@@ -333,11 +402,15 @@ class RallyEvent(SQLModel, table=True):
     )
 
     id: str = Field(default_factory=new_id, primary_key=True)
-    match_id: str = Field(foreign_key="matches.id", index=True)
+    match_id: str = Field(foreign_key="matches.id", ondelete="CASCADE", index=True)
     seq: int
     client_event_id: str
     type: str
     team: str | None = None
     payload: dict[str, Any] | None = Field(default=None, sa_column=json_column())
-    actor_id: str | None = Field(default=None, foreign_key="users.id")
-    created_at: datetime = Field(default_factory=utcnow)
+    actor_id: str | None = Field(
+        default=None, foreign_key="users.id", ondelete="SET NULL"
+    )
+    created_at: datetime = Field(
+        default_factory=utcnow, sa_column=utc_timestamp_column()
+    )

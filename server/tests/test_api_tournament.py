@@ -240,3 +240,80 @@ async def test_entry_status_transitions(organizer, status):
     )
     assert response.status_code == 200
     assert response.json()["status"] == status
+
+
+# ---------------------------------------------------------------------------
+# Cascading deletes
+# ---------------------------------------------------------------------------
+
+
+async def test_deleting_a_tournament_removes_everything_under_it(organizer):
+    """Regression: this returned 500 on Postgres.
+
+    SQLAlchemy cannot order these deletes itself — Match points at Entry through
+    a bare column, not a relationship — so the database has to cascade. SQLite
+    hid the bug by not enforcing foreign keys at all until we turned the pragma
+    on.
+    """
+    from .test_api_draws import build_field
+
+    tid, did, _ = await build_field(organizer, 4)
+    await organizer.post(f"/api/v1/tournaments/{tid}/courts", json={"name": "Court 1"})
+    draw = await organizer.post(f"/api/v1/divisions/{did}/draw")
+    assert draw.status_code == 201
+
+    response = await organizer.delete(f"/api/v1/tournaments/{tid}")
+    assert response.status_code == 204, response.text
+
+    assert (await organizer.get(f"/api/v1/tournaments/{tid}")).status_code == 404
+    assert (await organizer.get(f"/api/v1/divisions/{did}")).status_code == 404
+    assert (await organizer.get(f"/api/v1/tournaments/{tid}/courts")).status_code == 404
+
+
+async def test_deleting_a_division_with_a_draw_succeeds(organizer):
+    from .test_api_draws import build_field
+
+    _, did, _ = await build_field(organizer, 4)
+    await organizer.post(f"/api/v1/divisions/{did}/draw")
+
+    assert (await organizer.delete(f"/api/v1/divisions/{did}")).status_code == 204
+    assert (await organizer.get(f"/api/v1/divisions/{did}")).status_code == 404
+
+
+async def test_deleting_a_division_after_scoring_succeeds(organizer):
+    """Games and rally events hang off matches; they must cascade too."""
+    from uuid import uuid4
+
+    from .test_api_draws import build_field
+
+    _, did, _ = await build_field(organizer, 4)
+    await organizer.post(f"/api/v1/divisions/{did}/draw")
+    draw = (await organizer.get(f"/api/v1/divisions/{did}/draw")).json()
+    match = next(m for m in draw["matches"] if m["status"] == "ready")
+
+    await organizer.post(
+        f"/api/v1/matches/{match['id']}/events",
+        json={"events": [{"type": "RALLY_WON", "team": None,
+                          "client_event_id": uuid4().hex}]},
+    )
+    assert (await organizer.delete(f"/api/v1/divisions/{did}")).status_code == 204
+
+
+async def test_deleting_a_court_leaves_its_matches_alone(organizer):
+    """A court is a soft reference: removing it must clear the assignment, not
+    delete the match."""
+    from .test_api_draws import build_field
+
+    tid, did, _ = await build_field(organizer, 4)
+    court = (await organizer.post(f"/api/v1/tournaments/{tid}/courts",
+                                  json={"name": "Court 1"})).json()
+    await organizer.post(f"/api/v1/divisions/{did}/draw")
+    draw = (await organizer.get(f"/api/v1/divisions/{did}/draw")).json()
+    match = next(m for m in draw["matches"] if m["status"] == "ready")
+    await organizer.patch(f"/api/v1/matches/{match['id']}/court?court_id={court['id']}")
+
+    assert (await organizer.delete(f"/api/v1/courts/{court['id']}")).status_code == 204
+
+    after = (await organizer.get(f"/api/v1/divisions/{did}/draw")).json()
+    still_there = next(m for m in after["matches"] if m["id"] == match["id"])
+    assert still_there["court_id"] is None, "the match survives without its court"

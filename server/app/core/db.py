@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 from collections.abc import AsyncGenerator
+from typing import Any
 
+from sqlalchemy import event
 from sqlalchemy.ext.asyncio import AsyncEngine, async_sessionmaker, create_async_engine
 from sqlmodel import SQLModel
 
@@ -25,12 +27,31 @@ def _connect_args(settings: Settings) -> dict[str, object]:
 
 def create_engine(settings: Settings | None = None) -> AsyncEngine:
     settings = settings or get_settings()
-    return create_async_engine(
+    engine = create_async_engine(
         settings.database_url,
         echo=settings.debug,
         future=True,
         connect_args=_connect_args(settings),
     )
+    if settings.database_url.startswith("sqlite"):
+        _enforce_sqlite_foreign_keys(engine)
+    return engine
+
+
+def _enforce_sqlite_foreign_keys(engine: AsyncEngine) -> None:
+    """Turn on SQLite's foreign key enforcement.
+
+    SQLite ignores foreign keys unless asked, so a delete that Postgres refuses
+    succeeds silently here — which is exactly how a broken cascade reached
+    production untested. With this on, the SQLite test suite fails the same way
+    Postgres would.
+    """
+
+    @event.listens_for(engine.sync_engine, "connect")
+    def _set_pragma(dbapi_connection: Any, _record: Any) -> None:
+        cursor = dbapi_connection.cursor()
+        cursor.execute("PRAGMA foreign_keys=ON")
+        cursor.close()
 
 
 def get_engine() -> AsyncEngine:
