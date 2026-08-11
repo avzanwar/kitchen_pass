@@ -9,7 +9,7 @@ from __future__ import annotations
 import asyncio
 from logging.config import fileConfig
 
-from sqlalchemy import pool
+from sqlalchemy import engine_from_config, pool
 from sqlalchemy.engine import Connection
 from sqlalchemy.ext.asyncio import async_engine_from_config
 from sqlmodel import SQLModel
@@ -69,8 +69,33 @@ async def run_async_migrations() -> None:
     await connectable.dispose()
 
 
+def run_sync_migrations() -> None:
+    connectable = engine_from_config(
+        config.get_section(config.config_ini_section, {}),
+        prefix="sqlalchemy.",
+        poolclass=pool.NullPool,
+    )
+    with connectable.connect() as connection:
+        do_run_migrations(connection)
+    connectable.dispose()
+
+
+ASYNC_DRIVERS = ("+asyncpg", "+aiosqlite", "+aiomysql", "+asyncmy")
+
+
 def run_migrations_online() -> None:
-    asyncio.run(run_async_migrations())
+    """Pick the driver style from the URL.
+
+    `alembic upgrade` from a shell gets the app's async URL. The application
+    itself migrates on startup with a *sync* URL, because it is already inside a
+    running event loop and `asyncio.run` cannot nest — supporting both here is
+    what lets a container migrate itself with no release phase.
+    """
+    url = config.get_main_option("sqlalchemy.url") or ""
+    if any(driver in url for driver in ASYNC_DRIVERS):
+        asyncio.run(run_async_migrations())
+    else:
+        run_sync_migrations()
 
 
 if context.is_offline_mode():

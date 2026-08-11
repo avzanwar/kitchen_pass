@@ -1,0 +1,40 @@
+# Render blueprint: one web service + one Postgres, both on free tiers.
+#
+# Deploy with:  https://render.com/deploy  (or Dashboard -> New -> Blueprint)
+# pointed at this repository.
+#
+# Two things to know about the free tier:
+#   * The service sleeps after 15 minutes idle. The next request wakes it and
+#     takes roughly 30-60 seconds. Fine for friends testing; not for an event.
+#   * Free Postgres instances are removed after 30 days. Move to a paid
+#     instance, or to a free Neon database, before running anything real.
+
+services:
+  - type: web
+    name: kitchen-pass
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    plan: free
+    region: oregon
+    healthCheckPath: /health
+    envVars:
+      # Render generates a strong value; the app refuses to boot without one.
+      - key: KP_SECRET_KEY
+        generateValue: true
+      - key: KP_DATABASE_URL
+        fromDatabase:
+          name: kitchen-pass-db
+          property: connectionString
+      - key: KP_DEBUG
+        value: "false"
+      # Loads the demo tournament on first boot only, so friends have something
+      # to click. It never overwrites data that already exists.
+      - key: KP_SEED_ON_START
+        value: "true"
+
+databases:
+  - name: kitchen-pass-db
+    plan: free
+    region: oregon
+    postgresMajorVersion: "16"

@@ -28,8 +28,17 @@ class Settings(BaseSettings):
     debug: bool = False
 
     #: SQLite by default so the API runs with no services installed. Point this
-    #: at postgresql+asyncpg://... in deployment.
+    #: at postgresql+asyncpg://... in deployment. Managed hosts usually inject a
+    #: bare `postgres://` URL, which `_normalise_database_url` rewrites.
     database_url: str = "sqlite+aiosqlite:///./kitchen_pass.db"
+
+    #: Load the demo tournament on first boot, if the database is empty. Handy
+    #: for a test deployment; never re-seeds over existing data.
+    seed_on_start: bool = False
+
+    #: Serve the built frontend from this directory. One service, one origin,
+    #: no CORS, and same-origin WebSockets — which is what free hosts make easy.
+    static_dir: str = ""
 
     #: Signing key for access tokens. MUST be overridden outside development —
     #: `assert_production_safe` refuses to boot otherwise. At least 32 bytes,
@@ -54,9 +63,34 @@ class Settings(BaseSettings):
             return [origin.strip() for origin in value.split(",") if origin.strip()]
         return value
 
+    @field_validator("database_url", mode="after")
+    @classmethod
+    def _normalise_database_url(cls, value: str) -> str:
+        """Accept the URL forms managed hosts actually hand out.
+
+        Render, Heroku, Neon and friends inject `postgres://…` or
+        `postgresql://…`, neither of which names an async driver — SQLAlchemy
+        would try psycopg2 and fail at startup with a confusing error. Rewrite
+        to asyncpg so the platform's own value can be pasted in unedited.
+        """
+        if value.startswith("postgres://"):
+            return "postgresql+asyncpg://" + value[len("postgres://"):]
+        if value.startswith("postgresql://"):
+            return "postgresql+asyncpg://" + value[len("postgresql://"):]
+        return value
+
     @property
     def is_postgres(self) -> bool:
         return self.database_url.startswith("postgresql")
+
+    @property
+    def sync_database_url(self) -> str:
+        """The same database through a synchronous driver, for Alembic."""
+        return (
+            self.database_url
+            .replace("postgresql+asyncpg://", "postgresql+psycopg://")
+            .replace("sqlite+aiosqlite://", "sqlite://")
+        )
 
     def assert_production_safe(self) -> None:
         """Refuse to serve with a placeholder or too-short signing key.

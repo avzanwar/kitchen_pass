@@ -13,6 +13,8 @@ dependencies = [
     "alembic>=1.13",
     "aiosqlite>=0.20",
     "asyncpg>=0.29",
+    # Alembic is synchronous, so Postgres migrations need a sync driver too.
+    "psycopg[binary]>=3.2",
     "pyjwt>=2.9",
     "pwdlib[argon2]>=0.2.1",
     "python-slugify>=8.0",

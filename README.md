@@ -32,6 +32,55 @@ docker compose up --build
 Postgres, Redis, the API (behind Alembic migrations) and an nginx-served build
 of the frontend, on http://localhost:8080.
 
+## Deploying it
+
+`Dockerfile` at the repo root builds **one image that serves both the API and
+the frontend** — one service, one URL, no CORS, same-origin WebSockets. That is
+what makes a free tier workable. The container migrates itself on startup, so
+there is no release phase to configure.
+
+### Render (free)
+
+`render.yaml` is a blueprint: Dashboard → **New → Blueprint** → pick this repo.
+It provisions a free web service plus a free Postgres, generates `KP_SECRET_KEY`
+for you, and sets `KP_SEED_ON_START=true` so the demo tournament is there on
+first boot.
+
+Two limits of the free tier, neither of which is a bug:
+
+- The service **sleeps after 15 minutes idle**; the next request wakes it and
+  takes roughly 30–60 seconds. Fine for friends poking at it, not for a real
+  event — and worth warning testers about, or they will think it is broken.
+- Free Postgres instances are **removed after 30 days**. Point
+  `KP_DATABASE_URL` at a free [Neon](https://neon.tech) database instead if you
+  want it to persist.
+
+### Anywhere else that runs a container
+
+Fly.io, Koyeb, Railway and Hugging Face Spaces all take the same image. Set:
+
+| Variable | Value |
+|---|---|
+| `KP_SECRET_KEY` | `openssl rand -hex 32` — **required**, the app refuses to boot without it |
+| `KP_DATABASE_URL` | The platform's Postgres URL, pasted unedited |
+| `KP_SEED_ON_START` | `true` for a demo instance, `false`/unset for real use |
+
+`KP_DATABASE_URL` accepts `postgres://`, `postgresql://` or
+`postgresql+asyncpg://` — hosts hand out all three and the app normalises them,
+because the bare forms otherwise fail at startup looking for psycopg2.
+
+**PythonAnywhere's free tier will not work.** It serves WSGI only; FastAPI is
+ASGI, and the live scoreboard needs WebSockets, which that tier cannot do at
+all.
+
+### Seeding is first-boot only
+
+`KP_SEED_ON_START=true` loads the demo tournament **only into an empty
+database**. Deployed containers restart constantly — redeploys, idle wakes,
+crash loops — and re-seeding on any of those would destroy whatever testers had
+entered. Verified: adding a user, restarting with seeding still enabled, and
+confirming the user survives.
+
 ## What it does
 
 **Organizer** — create a tournament, add courts, define divisions (skill, age,
