@@ -18,6 +18,10 @@ dependencies = [
     "pyjwt>=2.9",
     "pwdlib[argon2]>=0.2.1",
     "python-slugify>=8.0",
+    # Bulk import: multipart for the upload itself, openpyxl to read and write
+    # .xlsx. CSV needs nothing beyond the standard library.
+    "python-multipart>=0.0.9",
+    "openpyxl>=3.1",
 ]
 
 [dependency-groups]
@@ -63,4 +67,11 @@ exclude = ["alembic/"]
 # redis is optional: the hub falls back to in-process fan-out without it.
 [[tool.mypy.overrides]]
 module = ["redis.*"]
+ignore_missing_imports = true
+
+# openpyxl ships no type information, and types-openpyxl lags the runtime
+# closely enough that pinning it costs more than it catches. The two modules
+# that touch it keep their own annotations.
+[[tool.mypy.overrides]]
+module = ["openpyxl.*"]
 ignore_missing_imports = true

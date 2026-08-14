@@ -5,6 +5,7 @@ import { Link, Navigate, Route, Routes, useLocation, useNavigate } from "react-r
 
 import { Ball, Spinner, cx } from "./components/ui";
 import Auth from "./features/Auth";
+import BulkImport from "./features/BulkImport";
 import DivisionDetail from "./features/DivisionDetail";
 import LiveMatch from "./features/LiveMatch";
 import Players from "./features/Players";
@@ -106,6 +107,7 @@ export default function App() {
         } />
         <Route path="/" element={<RequireAuth><Tournaments /></RequireAuth>} />
         <Route path="/players" element={<RequireAuth><Players /></RequireAuth>} />
+        <Route path="/import" element={<RequireAuth><BulkImport /></RequireAuth>} />
         <Route path="/tournaments/:tournamentId" element={
           <RequireAuth><TournamentDetail /></RequireAuth>
         } />

@@ -33,7 +33,10 @@ async function request<T>(
 ): Promise<T> {
   const token = getToken();
   const headers = new Headers(init.headers);
-  headers.set("Content-Type", "application/json");
+  // FormData must set its own Content-Type: the multipart boundary is generated
+  // by the browser, and overriding the header leaves the server unable to split
+  // the parts.
+  if (!(init.body instanceof FormData)) headers.set("Content-Type", "application/json");
   if (token) headers.set("Authorization", `Bearer ${token}`);
 
   let response: Response;
@@ -64,6 +67,11 @@ function detailOf(body: unknown): string | null {
   if (!body || typeof body !== "object") return null;
   const detail = (body as { detail?: unknown }).detail;
   if (typeof detail === "string") return detail;
+  if (detail && typeof detail === "object" && !Array.isArray(detail)) {
+    // A structured rejection — the bulk import returns { message, preview }.
+    const message = (detail as { message?: unknown }).message;
+    if (typeof message === "string") return message;
+  }
   if (Array.isArray(detail)) {
     // FastAPI validation errors: surface the first message rather than [object].
     const first = detail[0] as { msg?: string; loc?: string[] } | undefined;
@@ -75,12 +83,30 @@ function detailOf(body: unknown): string | null {
   return null;
 }
 
+/** FormData rides through untouched; anything else is JSON. */
+function encodeBody(body: unknown): BodyInit | undefined {
+  if (body === undefined) return undefined;
+  if (body instanceof FormData) return body;
+  return JSON.stringify(body);
+}
+
 const get = <T,>(path: string) => request<T>(path);
 const post = <T,>(path: string, body?: unknown) =>
-  request<T>(path, { method: "POST", body: body === undefined ? undefined : JSON.stringify(body) });
+  request<T>(path, { method: "POST", body: encodeBody(body) });
 const patch = <T,>(path: string, body?: unknown) =>
-  request<T>(path, { method: "PATCH", body: body === undefined ? undefined : JSON.stringify(body) });
+  request<T>(path, { method: "PATCH", body: encodeBody(body) });
 const del = (path: string) => request<void>(path, { method: "DELETE" });
+
+function importForm(
+  file: File,
+  target: { tournamentId?: string; name?: string },
+): FormData {
+  const form = new FormData();
+  form.append("file", file);
+  if (target.tournamentId) form.append("tournament_id", target.tournamentId);
+  if (target.name) form.append("tournament_name", target.name);
+  return form;
+}
 
 // ---------------------------------------------------------------------------
 // Types
@@ -250,6 +276,60 @@ export interface Board {
   conflicts: { match_id: string; reason: string; player_ids: string[] }[];
 }
 
+export interface ImportProblem {
+  severity: "error" | "warning";
+  message: string;
+  /** Line number in the uploaded sheet; null for a problem with the whole file. */
+  row: number | null;
+}
+
+export interface ImportPreview {
+  ok: boolean;
+  tournament_name: string;
+  tournament_id: string | null;
+  creates_tournament: boolean;
+  divisions: {
+    name: string;
+    format: string;
+    draw_kind: string;
+    skill: string | null;
+    age: string | null;
+    best_of: number;
+    pools: number;
+    existing: boolean;
+    entries: {
+      row: number;
+      name: string;
+      seed: number | null;
+      players: { name: string; rating: number | null; existing: boolean }[];
+    }[];
+  }[];
+  problems: ImportProblem[];
+  entry_count: number;
+  new_players: number;
+  matched_players: number;
+}
+
+export interface ImportResult {
+  tournament: Tournament;
+  tournament_created: boolean;
+  divisions_created: number;
+  divisions_reused: number;
+  entries_created: number;
+  players_created: number;
+  players_matched: number;
+  problems: ImportProblem[];
+}
+
+/** The preview a rejected commit carries back, if the failure was the sheet's. */
+export function previewFromError(error: unknown): ImportPreview | null {
+  if (!(error instanceof ApiError)) return null;
+  const detail = (error.body as { detail?: unknown } | undefined)?.detail;
+  if (!detail || typeof detail !== "object") return null;
+  const preview = (detail as { preview?: unknown }).preview;
+  return preview && typeof preview === "object" ? (preview as ImportPreview) : null;
+}
+
 // ---------------------------------------------------------------------------
 // Endpoints
 // ---------------------------------------------------------------------------
@@ -303,6 +383,15 @@ export const api = {
     post<{ expires_at: string }>(`/matches/${id}/claim`, { force }),
   setCourt: (matchId: string, courtId: string | null) =>
     patch<unknown>(`/matches/${matchId}/court${courtId ? `?court_id=${courtId}` : ""}`),
+
+  // Bulk import. The templates are plain links rather than fetches — a link
+  // cannot carry the bearer token, and these endpoints are public because the
+  // files they return are generated samples with no user data in them.
+  templateUrl: (kind: "csv" | "xlsx") => `/api/v1/imports/template.${kind}`,
+  importPreview: (file: File, target: { tournamentId?: string; name?: string }) =>
+    post<ImportPreview>("/imports/preview", importForm(file, target)),
+  importCommit: (file: File, target: { tournamentId?: string; name?: string }) =>
+    post<ImportResult>("/imports/commit", importForm(file, target)),
 
   board: (tid: string) => get<Board>(`/tournaments/${tid}/board`),
   assignCourts: (tid: string, body: { division_id?: string; dry_run?: boolean; rest_waves?: number }) =>

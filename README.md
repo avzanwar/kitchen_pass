@@ -119,7 +119,7 @@ confirming the user survives.
 
 **Organizer** — create a tournament, add courts, define divisions (skill, age,
 format), register players and teams, generate a draw, auto-assign courts, watch
-the board.
+the board. Or upload a spreadsheet and get all of that in one go.
 
 **Scorekeeper** — open a match on a phone and score it with rules-based side-out
 or rally scoring, right down to which service court the server stands in.
@@ -137,8 +137,10 @@ server/
   app/scoring/            the authoritative scoring engine — pure, no I/O
   app/draws/              draw generation, advancement, standings — also pure
   app/scheduling/         court assignment and conflict detection — also pure
+  app/imports/            spreadsheet parsing, validation, template — also pure
   app/models.py           SQLModel tables
-  app/api/v1/             auth, players, tournaments, divisions, scoring, courts, public
+  app/api/v1/             auth, players, tournaments, divisions, scoring, courts,
+                          public, imports
   app/realtime/           WebSocket fan-out (in-process, or Redis)
   alembic/                migrations
   scripts/                corpus generation, seed data
@@ -155,9 +157,9 @@ conformance/
 ## Testing
 
 ```bash
-cd server && uv run pytest              # 337 tests
+cd server && uv run pytest              # 434 tests
 cd server && uv run ruff check . && uv run mypy
-cd web    && npx vitest run             # 24 tests
+cd web    && npx vitest run             # 37 tests
 cd web    && npx tsc --noEmit
 cd web    && npm run e2e                # Playwright — needs the stack running
 ```
@@ -223,6 +225,35 @@ another device — the events are discarded rather than retried forever, and the
 UI says so and reloads the authoritative score. Exactly one scorekeeper holds a
 match at a time via a lease, which turns a distributed-merge problem into a
 lock.
+
+### Bulk upload previews before it writes
+
+Registering a 40-team event by hand is the most tedious thing an organizer does,
+and most of them already have the entry sheet. So `/import` takes a `.xlsx` or a
+`.csv`: one row per team, rows sharing a division name become one division, and
+that division's settings are read from the first row that names it.
+
+Three layers, and only the last one touches the database:
+
+* `app/imports/sheet.py` absorbs the mess — BOMs, semicolon and tab exports,
+  cp1252, a title row above the header, columns in any order, headers spelled
+  "Player 1" or "player_1" or "P1". It knows nothing about pickleball.
+* `app/imports/plan.py` turns rows into a plan plus a list of problems, and is
+  pure. An **error** blocks the import; a **warning** states an assumption and
+  carries on. The bias is deliberate — refusing a 60-team sheet over one odd
+  cell is worse than importing it and saying what was assumed.
+* `app/services/import_service.py` resolves the plan against the roster and
+  applies it in one transaction.
+
+Two things follow from that split. The preview runs the identical code the
+commit will, so what the organizer approves is what happens. And the import is
+all-or-nothing: a half-created division is worse than a rejected file, because
+you cannot tell what is missing without auditing every row by hand.
+
+The template is generated from the same column definitions the parser accepts,
+so the two cannot drift, and a test asserts the CSV and Excel versions import
+identically. Its sample rows are a working tournament — download, upload, and
+you have an event to poke at.
 
 ### Draws resolve, they don't rebuild
 

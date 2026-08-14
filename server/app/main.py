@@ -17,7 +17,16 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
-from app.api.v1 import auth, courts, divisions, players, public, scoring, tournaments
+from app.api.v1 import (
+    auth,
+    courts,
+    divisions,
+    imports,
+    players,
+    public,
+    scoring,
+    tournaments,
+)
 from app.core.config import get_settings
 from app.core.db import create_all, dispose, session_factory
 from app.core.startup import run_migrations, seed_demo_if_empty
@@ -78,6 +87,7 @@ def create_app() -> FastAPI:
     app.include_router(scoring.router, prefix=api)
     app.include_router(courts.router, prefix=api)
     app.include_router(public.router, prefix=api)
+    app.include_router(imports.router, prefix=api)
 
     @app.get("/health", tags=["meta"])
     async def health() -> dict[str, str]:

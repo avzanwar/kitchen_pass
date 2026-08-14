@@ -222,3 +222,71 @@ class DrawOut(Base):
     kind: str
     pools: dict[str, list[str]]
     matches: list[MatchOut]
+
+
+# ---------------------------------------------------------------------------
+# Bulk import
+# ---------------------------------------------------------------------------
+
+
+class ImportProblemOut(Base):
+    severity: str
+    message: str
+    #: Line number in the uploaded sheet, or null for a whole-file problem.
+    row: int | None = None
+
+
+class ImportPlayerOut(Base):
+    name: str
+    rating: float | None = None
+    #: True when this name matched someone already on the organizer's roster.
+    existing: bool = False
+
+
+class ImportEntryOut(Base):
+    row: int
+    name: str
+    seed: int | None
+    players: list[ImportPlayerOut]
+
+
+class ImportDivisionOut(Base):
+    name: str
+    format: str
+    draw_kind: str
+    skill: str | None
+    age: str | None
+    best_of: int
+    pools: int
+    #: True when a division of this name already exists in the target tournament,
+    #: so these entries would be added to it rather than creating a new one.
+    existing: bool = False
+    entries: list[ImportEntryOut]
+
+
+class ImportPreviewOut(Base):
+    """What the upload would do. Returned by the preview, and on a rejection."""
+
+    #: False when any problem has severity "error"; the commit is refused.
+    ok: bool
+    tournament_name: str
+    tournament_id: str | None = None
+    creates_tournament: bool
+    divisions: list[ImportDivisionOut]
+    problems: list[ImportProblemOut]
+    entry_count: int
+    new_players: int
+    matched_players: int
+
+
+class ImportResultOut(Base):
+    tournament: TournamentOut
+    tournament_created: bool
+    divisions_created: int
+    divisions_reused: int
+    entries_created: int
+    players_created: int
+    players_matched: int
+    #: Warnings that did not block the import, kept so the organizer still sees
+    #: what was assumed on their behalf.
+    problems: list[ImportProblemOut]

@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
-  ChevronLeft, ChevronRight, LayoutGrid, Plus, Share2, Trash2, Wand2,
+  ChevronLeft, ChevronRight, LayoutGrid, Plus, Share2, Trash2, Upload, Wand2,
 } from "lucide-react";
 import { useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
@@ -85,6 +85,7 @@ export default function TournamentDetail() {
 
 function Divisions({ tournamentId }: { tournamentId: string }) {
   const qc = useQueryClient();
+  const navigate = useNavigate();
   const [adding, setAdding] = useState(false);
   const [name, setName] = useState("");
   const [format, setFormat] = useState("doubles");
@@ -144,6 +145,10 @@ function Divisions({ tournamentId }: { tournamentId: string }) {
 
       <button className="btn btn-primary btn-block" onClick={() => setAdding(true)}>
         <Plus size={17} /> New division
+      </button>
+      <button className="btn btn-line btn-block"
+        onClick={() => navigate(`/import?tournament=${tournamentId}`)}>
+        <Upload size={16} /> Upload divisions & teams
       </button>
 
       <Sheet open={adding} onClose={() => setAdding(false)} title="New division">

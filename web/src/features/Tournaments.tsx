@@ -1,13 +1,14 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { CalendarDays, ChevronRight, Plus, Trophy } from "lucide-react";
+import { CalendarDays, ChevronRight, Plus, Trophy, Upload } from "lucide-react";
 import { useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 
 import { Empty, ErrorNote, Sheet, Spinner } from "../components/ui";
 import { api } from "../lib/api";
 
 export default function Tournaments() {
   const qc = useQueryClient();
+  const navigate = useNavigate();
   const [creating, setCreating] = useState(false);
   const [name, setName] = useState("");
   const [from, setFrom] = useState("");
@@ -61,6 +62,13 @@ export default function Tournaments() {
       <button className="btn btn-primary btn-block" onClick={() => setCreating(true)}>
         <Plus size={18} /> New tournament
       </button>
+      <button className="btn btn-line btn-block" onClick={() => navigate("/import")}>
+        <Upload size={17} /> Upload a spreadsheet
+      </button>
+      <p className="foot-note">
+        Registering a big event by hand is slow. Upload the entry sheet you
+        already have and it becomes divisions, teams and players in one go.
+      </p>
 
       <Sheet open={creating} onClose={() => setCreating(false)} title="New tournament">
         <input

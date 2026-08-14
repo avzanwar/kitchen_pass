@@ -217,3 +217,216 @@
 
 .tab-static { opacity: 0.6; pointer-events: none; }
 .center { text-align: center; }
+
+/* ---- bulk import ----
+   Three blocks: the template card, the drop zone, and the preview report. The
+   report is the reason this screen exists, so it gets the most structure — an
+   organizer must be able to check fifty imported teams by eye before creating
+   any of them. */
+
+.tmpl-card {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 13px;
+  box-shadow: var(--shadow);
+}
+.tmpl-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--font-d);
+  font-weight: 800;
+  font-size: 14px;
+  color: var(--A);
+}
+.tmpl-text {
+  margin: 8px 0 11px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--muted);
+}
+.tmpl-btns { display: flex; gap: 8px; }
+.tmpl-btns .btn { flex: 1; text-decoration: none; }
+
+.tmpl-cols { margin-top: 11px; }
+.tmpl-cols summary {
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--A);
+  list-style: none;
+}
+.tmpl-cols summary::-webkit-details-marker { display: none; }
+.tmpl-cols summary::after { content: " ›"; }
+.tmpl-cols[open] summary::after { content: " ⌄"; }
+.tmpl-cols dl {
+  margin: 10px 0 0;
+  font-size: 13px;
+  border-top: 1px solid var(--line);
+  padding-top: 9px;
+}
+.tmpl-cols dt {
+  font-weight: 700;
+  margin-top: 8px;
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+}
+.tmpl-cols dt em {
+  font-style: normal;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--A);
+  background: #eaf4f1;
+  border-radius: 5px;
+  padding: 1px 5px;
+}
+.tmpl-cols dd { margin: 2px 0 0; color: var(--muted); line-height: 1.45; }
+
+.drop {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+  padding: 26px 16px;
+  border: 2px dashed var(--line);
+  border-radius: 14px;
+  background: var(--card);
+  color: var(--muted);
+  cursor: pointer;
+  text-align: center;
+}
+.drop-on, .drop:hover { border-color: var(--A); background: #f2f8f6; }
+.drop-filled { border-style: solid; border-color: var(--A); color: var(--A); }
+.drop-name { font-weight: 700; font-size: 14px; color: var(--ink); }
+.drop-hint { font-size: 12px; }
+
+.imp-summary {
+  display: flex;
+  gap: 8px;
+  background: #eaf4f1;
+  border-radius: 12px;
+  padding: 11px;
+}
+.imp-summary-bad { background: #fdece4; }
+.imp-stat {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+  min-width: 0;
+}
+.imp-stat b {
+  font-family: var(--font-d);
+  font-size: 21px;
+  line-height: 1.1;
+  color: var(--ink);
+}
+.imp-stat span {
+  font-size: 11px;
+  color: var(--muted);
+  text-align: center;
+}
+
+.imp-problems { border-radius: 12px; padding: 3px 11px 9px; }
+.imp-error { background: #fdece4; }
+.imp-warning { background: #fff4d6; }
+.imp-problems-head {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  width: 100%;
+  padding: 9px 0;
+  background: none;
+  border: 0;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 800;
+  color: inherit;
+}
+.imp-error .imp-problems-head { color: #a8431c; }
+.imp-warning .imp-problems-head { color: #7a5600; }
+.imp-problems-head em {
+  margin-left: auto;
+  font-style: normal;
+  font-size: 11px;
+  font-weight: 700;
+  opacity: 0.7;
+}
+.imp-problems ul { margin: 0; padding: 0 0 0 2px; list-style: none; }
+.imp-problems li {
+  font-size: 13px;
+  line-height: 1.45;
+  padding: 5px 0;
+  border-top: 1px solid rgba(15, 33, 30, 0.08);
+}
+.imp-problems li b {
+  font-weight: 800;
+  margin-right: 6px;
+  font-variant-numeric: tabular-nums;
+}
+
+.imp-div {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 12px;
+  box-shadow: var(--shadow);
+}
+.imp-div-head { display: flex; align-items: center; gap: 6px; }
+.imp-div-name { font-family: var(--font-d); font-weight: 800; font-size: 15px; }
+.imp-div-meta { font-size: 12px; color: var(--muted); margin-top: 2px; }
+
+.imp-entry {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 7px 0;
+  border-top: 1px solid var(--line);
+  margin-top: 7px;
+}
+.imp-entry:first-of-type { margin-top: 9px; }
+.imp-seed {
+  flex: none;
+  width: 22px;
+  height: 22px;
+  border-radius: 7px;
+  background: #eef1ea;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 800;
+  display: grid;
+  place-items: center;
+  font-variant-numeric: tabular-nums;
+}
+.imp-entry-name {
+  font-size: 14px;
+  font-weight: 600;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.imp-entry-players {
+  margin-left: auto;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 4px;
+}
+.imp-player {
+  font-size: 11px;
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: #f2f4ef;
+  color: var(--muted);
+  white-space: nowrap;
+}
+/* A name already on the roster: it will be reused, not added again. Worth
+   showing, because a wrong match is the one mistake the import can make
+   silently. */
+.imp-player.known { background: #eaf4f1; color: var(--A); font-weight: 700; }

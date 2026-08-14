@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, HTTPException
-from slugify import slugify
 from sqlmodel import col, func, select
 
 from app.api.deps import CurrentUser, OwnedTournament, SessionDep
@@ -15,20 +14,9 @@ from app.schemas import (
     TournamentOut,
     TournamentUpdate,
 )
+from app.services.slugs import unique_slug
 
 router = APIRouter(tags=["tournaments"])
-
-
-async def _unique_slug(session: SessionDep, name: str) -> str:
-    base = slugify(name) or "tournament"
-    slug = base
-    n = 2
-    while (
-        await session.exec(select(Tournament).where(Tournament.slug == slug))
-    ).first() is not None:
-        slug = f"{base}-{n}"
-        n += 1
-    return slug
 
 
 @router.get("/tournaments", response_model=list[TournamentOut])
@@ -48,7 +36,7 @@ async def create_tournament(
     tournament = Tournament(
         **body.model_dump(),
         owner_id=user.id,
-        slug=await _unique_slug(session, body.name),
+        slug=await unique_slug(session, body.name),
     )
     session.add(tournament)
     await session.commit()
