@@ -15,13 +15,20 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import CasualPlay from "../src/features/CasualPlay";
 
+// Deliberately overlapping names: "Novak"/"Nova", "Mike"/"Mikaela", and two
+// people whose first names both start with "Ni" — search is only interesting
+// when some entries match and others do not.
 const ROSTER = [
   { id: "p1", name: "Ivo Novak", avatar: null, rating: 4.25, is_guest: false },
   { id: "p2", name: "Priya Raman", avatar: null, rating: 4.0, is_guest: false },
+  { id: "p3", name: "Nina Roth", avatar: null, rating: 3.5, is_guest: false },
+  { id: "p4", name: "Nikhil Rao", avatar: null, rating: 3.75, is_guest: false },
+  { id: "p5", name: "Sam Whitfield", avatar: null, rating: 4.0, is_guest: false },
 ];
 const GUESTS = [
   ...ROSTER,
   { id: "g1", name: "Mike", avatar: null, rating: null, is_guest: true },
+  { id: "g2", name: "Mikaela", avatar: null, rating: null, is_guest: true },
 ];
 
 const CREATED = {
@@ -83,9 +90,9 @@ async function fillSlot(teamIndex: number, pick: { player?: string; name?: strin
     await waitFor(() => expect(screen.getByText(pick.player!)).toBeTruthy());
     fireEvent.click(screen.getByText(pick.player));
   } else {
-    const input = screen.getByPlaceholderText("…or type a name for a one-off");
+    const input = screen.getByPlaceholderText("Search, or type a new name");
     fireEvent.change(input, { target: { value: pick.name } });
-    fireEvent.click(screen.getByText("Add"));
+    fireEvent.click(screen.getByRole("button", { name: "Add" }));
   }
   await waitFor(() => expect(screen.queryByText("Choose a player")).toBeNull());
 }
@@ -247,5 +254,133 @@ describe("pickup game setup", () => {
     stubFetch();
     wrap();
     await waitFor(() => expect(screen.getByText("No pickup games yet")).toBeTruthy());
+  });
+});
+
+describe("searching for a player", () => {
+  beforeEach(() => localStorage.clear());
+  afterEach(() => vi.unstubAllGlobals());
+
+  /** Open the picker for team A's first slot. */
+  async function openPicker() {
+    const card = document.querySelectorAll(".team-card")[0] as HTMLElement;
+    fireEvent.click(within(card).getAllByText("Add player")[0]);
+    await waitFor(() => expect(screen.getByText("Ivo Novak")).toBeTruthy());
+    return screen.getByPlaceholderText("Search, or type a new name");
+  }
+
+  const shownNames = () =>
+    [...document.querySelectorAll(".pick-cell span, .guest-chip span")]
+      .map((n) => n.textContent);
+
+  it("shows the whole roster before anything is typed", async () => {
+    stubFetch();
+    wrap();
+    await openPicker();
+    expect(shownNames()).toEqual([
+      "Ivo Novak", "Priya Raman", "Nina Roth", "Nikhil Rao", "Sam Whitfield",
+      "Mike", "Mikaela",
+    ]);
+  });
+
+  it("narrows the list as you type", async () => {
+    stubFetch();
+    wrap();
+    const input = await openPicker();
+
+    fireEvent.change(input, { target: { value: "ni" } });
+    await waitFor(() => expect(shownNames()).toEqual(["Nina Roth", "Nikhil Rao"]));
+
+    fireEvent.change(input, { target: { value: "nin" } });
+    await waitFor(() => expect(shownNames()).toEqual(["Nina Roth"]));
+  });
+
+  it("matches anywhere in the name, not just the start", async () => {
+    stubFetch();
+    wrap();
+    const input = await openPicker();
+
+    fireEvent.change(input, { target: { value: "roth" } });
+    await waitFor(() => expect(shownNames()).toEqual(["Nina Roth"]));
+  });
+
+  it("ignores case", async () => {
+    stubFetch();
+    wrap();
+    const input = await openPicker();
+
+    fireEvent.change(input, { target: { value: "IVO" } });
+    await waitFor(() => expect(shownNames()).toEqual(["Ivo Novak"]));
+  });
+
+  it("filters recent guests too", async () => {
+    stubFetch();
+    wrap();
+    const input = await openPicker();
+
+    fireEvent.change(input, { target: { value: "mik" } });
+    await waitFor(() => expect(shownNames()).toEqual(["Mike", "Mikaela"]));
+  });
+
+  it("offers to add a one-off when nothing matches", async () => {
+    stubFetch();
+    wrap();
+    const input = await openPicker();
+
+    fireEvent.change(input, { target: { value: "Zorro" } });
+    await waitFor(() => expect(shownNames()).toEqual([]));
+    expect(screen.getByText(/Nobody matches/)).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: "Add" }));
+    await waitFor(() => expect(screen.queryByText("Choose a player")).toBeNull());
+    // Scoped to the slot: the derived team name reads "Zorro" too.
+    expect(
+      [...document.querySelectorAll(".slot-name")].map((n) => n.textContent),
+    ).toEqual(["Zorro"]);
+  });
+
+  it("picking a search result sends its id, not its name", async () => {
+    const calls = stubFetch();
+    wrap();
+    const input = await openPicker();
+
+    fireEvent.change(input, { target: { value: "whit" } });
+    await waitFor(() => expect(shownNames()).toEqual(["Sam Whitfield"]));
+    fireEvent.click(screen.getByText("Sam Whitfield"));
+
+    await fillSlot(0, { name: "A2" });
+    await fillSlot(1, { name: "B1" });
+    await fillSlot(1, { name: "B2" });
+    fireEvent.click(screen.getByText("Start game"));
+
+    await waitFor(() => expect(screen.getByText("Scoring screen")).toBeTruthy());
+    expect(bodyOf(calls).a.players[0]).toEqual({ player_id: "p5" });
+  });
+
+  it("the search resets between slots", async () => {
+    stubFetch();
+    wrap();
+    const input = await openPicker();
+
+    fireEvent.change(input, { target: { value: "nin" } });
+    await waitFor(() => expect(shownNames()).toEqual(["Nina Roth"]));
+    fireEvent.click(screen.getByText("Nina Roth"));
+    await waitFor(() => expect(screen.queryByText("Choose a player")).toBeNull());
+
+    // The next slot must not inherit the previous filter.
+    const again = await openPicker();
+    expect((again as HTMLInputElement).value).toBe("");
+    expect(shownNames().length).toBeGreaterThan(1);
+  });
+
+  it("someone already picked stays out of the results", async () => {
+    stubFetch();
+    wrap();
+    await fillSlot(0, { player: "Nina Roth" });
+
+    const input = await openPicker();
+    fireEvent.change(input, { target: { value: "ni" } });
+    // Nina is on team A already; only Nikhil is still available.
+    await waitFor(() => expect(shownNames()).toEqual(["Nikhil Rao"]));
   });
 });

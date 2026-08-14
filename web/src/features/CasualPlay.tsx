@@ -10,7 +10,7 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Coins, Play, Plus, Trash2, X, Zap } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 import {
@@ -170,7 +170,7 @@ function PlayerPicker({
   taken: Set<string>;
   onPick: (slot: Slot) => void;
 }) {
-  const [name, setName] = useState("");
+  const [query, setQuery] = useState("");
   const roster = useQuery({
     queryKey: ["players"], queryFn: () => api.players(), enabled: open,
   });
@@ -178,31 +178,59 @@ function PlayerPicker({
     queryKey: ["guests"], queryFn: () => api.players(true), enabled: open,
   });
 
+  // Clear between openings, or the next slot starts pre-filtered by whatever
+  // was typed for the last one.
+  useEffect(() => {
+    if (!open) setQuery("");
+  }, [open]);
+
   const add = () => {
-    const trimmed = name.trim();
+    const trimmed = query.trim();
     if (!trimmed) return;
     onPick({ name: trimmed });
-    setName("");
+    setQuery("");
     onClose();
   };
 
+  // Filtering is client-side against the already-loaded roster: it is instant,
+  // needs no debounce, and keeps working with no signal. `GET /players` does
+  // take a `search` parameter, but a round trip per keystroke would be worse
+  // for a roster this size.
+  const needle = query.trim().toLowerCase();
+  const matches = (p: Player) => !needle || p.name.toLowerCase().includes(needle);
+
+  const saved = (roster.data ?? []).filter((p) => !taken.has(p.id) && matches(p));
   const recentGuests = (guests.data ?? [])
-    .filter((p) => p.is_guest && !taken.has(p.id))
+    .filter((p) => p.is_guest && !taken.has(p.id) && matches(p))
     .slice(0, 12);
+  const nothingMatches = needle !== "" && saved.length === 0 && recentGuests.length === 0;
 
   return (
     <Sheet open={open} onClose={onClose} title="Choose a player">
-      {(roster.data?.length ?? 0) > 0 && (
-        <div className="pick-grid">
-          {roster.data
-            ?.filter((p) => !taken.has(p.id))
-            .map((p) => (
-              <button key={p.id} className="pick-cell"
-                onClick={() => { onPick({ player: p }); onClose(); }}>
-                <AvatarChip player={p} size={46} />
-                <span>{p.name}</span>
-              </button>
-            ))}
+      {/* Above the results, not below them: this box is a filter first and an
+          add-a-one-off second, and a filter belongs where you can see what it
+          is filtering. */}
+      <div className="pick-adhoc">
+        <input
+          className="input"
+          placeholder="Search, or type a new name"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          onKeyDown={(e) => e.key === "Enter" && add()}
+        />
+        <button className="btn btn-primary btn-sm" disabled={!query.trim()}
+          onClick={add}>Add</button>
+      </div>
+
+      {saved.length > 0 && (
+        <div className="pick-grid" style={{ marginTop: 12 }}>
+          {saved.map((p) => (
+            <button key={p.id} className="pick-cell"
+              onClick={() => { onPick({ player: p }); onClose(); }}>
+              <AvatarChip player={p} size={46} />
+              <span>{p.name}</span>
+            </button>
+          ))}
         </div>
       )}
 
@@ -225,13 +253,12 @@ function PlayerPicker({
         </>
       )}
 
-      <div className="pick-adhoc" style={{ marginTop: 12 }}>
-        <input className="input" placeholder="…or type a name for a one-off"
-          value={name} onChange={(e) => setName(e.target.value)}
-          onKeyDown={(e) => e.key === "Enter" && add()} />
-        <button className="btn btn-primary btn-sm" disabled={!name.trim()}
-          onClick={add}>Add</button>
-      </div>
+      {nothingMatches && (
+        <p className="foot-note" style={{ marginTop: 12 }}>
+          Nobody matches “{query.trim()}”. Tap <b>Add</b> to play with them as a
+          one-off guest.
+        </p>
+      )}
     </Sheet>
   );
 }
