@@ -61,7 +61,7 @@ function Entries({ divisionId, locked, singles }: {
   const entries = useQuery({
     queryKey: ["entries", divisionId], queryFn: () => api.entries(divisionId),
   });
-  const players = useQuery({ queryKey: ["players"], queryFn: api.players });
+  const players = useQuery({ queryKey: ["players"], queryFn: () => api.players() });
 
   const need = singles ? 1 : 2;
   const create = useMutation({

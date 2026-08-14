@@ -123,11 +123,15 @@ async def _roster(session: AsyncSession, user: User) -> dict[str, Player]:
     Where a name is duplicated in the roster, the oldest wins — matching the
     person who has been played with longest is the less surprising guess, and it
     keeps the choice stable between the preview and the commit.
+
+    Guests are excluded. A one-off name typed at the court for a pickup game
+    must never silently become a member of a tournament team because it happens
+    to spell the same way.
     """
     players = (
         await session.exec(
             select(Player)
-            .where(Player.owner_id == user.id)
+            .where(Player.owner_id == user.id, col(Player.is_guest).is_(False))
             .order_by(col(Player.created_at))
         )
     ).all()

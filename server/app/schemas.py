@@ -7,9 +7,10 @@ These are also what `openapi-typescript` turns into the frontend's client.
 
 from __future__ import annotations
 
-from typing import Any
+from datetime import datetime
+from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, EmailStr, Field
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, model_validator
 
 from .models import (
     CourtStatus,
@@ -72,6 +73,8 @@ class PlayerOut(Base):
     name: str
     avatar: dict[str, Any] | None = None
     rating: float | None = None
+    #: A one-off name from a pickup game rather than a saved roster player.
+    is_guest: bool = False
 
 
 # ---------------------------------------------------------------------------
@@ -290,3 +293,64 @@ class ImportResultOut(Base):
     #: Warnings that did not block the import, kept so the organizer still sees
     #: what was assumed on their behalf.
     problems: list[ImportProblemOut]
+
+
+# ---------------------------------------------------------------------------
+# Casual (pickup) matches
+# ---------------------------------------------------------------------------
+
+
+class CasualPlayerIn(Base):
+    """One slot on a pickup team: a saved player, or a name typed at the court."""
+
+    player_id: str | None = None
+    name: str | None = Field(default=None, min_length=1, max_length=80)
+
+    @model_validator(mode="after")
+    def _exactly_one(self) -> CasualPlayerIn:
+        if bool(self.player_id) == bool(self.name and self.name.strip()):
+            raise ValueError("give either player_id or name, not both")
+        return self
+
+
+class CasualTeamIn(Base):
+    #: 1 player for singles, 2 for doubles. Order matters to the scoring engine:
+    #: index 0 starts the game in the right-hand court.
+    players: list[CasualPlayerIn] = Field(min_length=1, max_length=2)
+    name: str | None = Field(default=None, max_length=80)
+
+
+class CasualMatchIn(Base):
+    format: DivisionFormat = DivisionFormat.DOUBLES
+    scoring: Literal["sideout", "rally"] = "sideout"
+    #: Target for every game. Best-of-3 and 5 keep the same target throughout,
+    #: which is what pickup play expects — no third-game-to-15 convention.
+    target: int = Field(default=11, ge=1, le=99)
+    best_of: Literal[1, 3, 5] = 1
+    win_by_2: bool = True
+    #: Rally scoring only; None disables the freeze.
+    freeze_at: int | None = Field(default=None, ge=1, le=99)
+    #: The coin toss result.
+    first_server: Literal["A", "B"] = "A"
+    a: CasualTeamIn
+    b: CasualTeamIn
+
+
+class CasualMatchOut(Base):
+    match_id: str
+    division_id: str
+    status: MatchStatus
+    format: str
+    scoring: str
+    target: int
+    best_of: int
+    created_at: datetime
+    a_name: str
+    b_name: str
+    a_players: list[PlayerOut]
+    b_players: list[PlayerOut]
+    #: Winning side, once there is one.
+    winner: Literal["A", "B"] | None = None
+    games_won: dict[str, int] = Field(default_factory=dict)
+    #: Per-game scores so the history row can show 11-8, 9-11, 11-4.
+    games: list[dict[str, int]] = Field(default_factory=list)

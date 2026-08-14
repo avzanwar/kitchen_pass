@@ -8,7 +8,7 @@ import { api, type Player } from "../lib/api";
 export default function Players() {
   const qc = useQueryClient();
   const [editing, setEditing] = useState<Partial<Player> | null>(null);
-  const list = useQuery({ queryKey: ["players"], queryFn: api.players });
+  const list = useQuery({ queryKey: ["players"], queryFn: () => api.players() });
 
   const remove = useMutation({
     mutationFn: (id: string) => api.deletePlayer(id),

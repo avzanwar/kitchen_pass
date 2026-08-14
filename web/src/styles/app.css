@@ -430,3 +430,56 @@
    showing, because a wrong match is the one mistake the import can make
    silently. */
 .imp-player.known { background: #eaf4f1; color: var(--A); font-weight: 700; }
+
+/* ---- pickup games ----
+   The setup screen is a verbatim port of the prototype's Play tab, so its
+   styling already lives in kitchen-pass.css. Only the pieces that tab never
+   had need rules here: the recent-guests strip and the history rows. */
+
+.guest-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.guest-chip {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px 4px 4px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--card);
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink);
+  font-family: var(--font-b);
+}
+.guest-chip:hover { border-color: var(--A); }
+
+/* The history row's tappable area is a button, so it needs the surrounding
+   .sched-main layout restated — a button does not inherit it. */
+.pickup-main {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+  background: none;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+  text-align: left;
+  font-family: inherit;
+  color: inherit;
+}
+.pickup-main .sched-teams {
+  display: flex;
+  align-items: baseline;
+  gap: 5px;
+  flex-wrap: wrap;
+}
+.pickup-main .sched-teams b { font-weight: 600; }
+/* The winner, once there is one. */
+.pickup-won { color: var(--A); font-weight: 800 !important; }

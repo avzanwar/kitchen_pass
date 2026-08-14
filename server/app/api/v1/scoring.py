@@ -13,6 +13,7 @@ from app.core.db import session_factory
 from app.core.security import TokenError, create_court_token, decode_token
 from app.models import Division, Match, MatchStatus, Tournament
 from app.realtime.hub import board_topic, hub, match_topic
+from app.services.casual_service import is_casual_division
 from app.services.draw_service import refresh_statuses
 from app.services.match_service import (
     LeaseError,
@@ -164,7 +165,10 @@ async def post_events(
     # playoff waiting on final pool standings.
     if was_open and match.status in (MatchStatus.COMPLETE, MatchStatus.ABANDONED):
         division = await session.get(Division, match.division_id)
-        if division is not None:
+        # A pickup game has no bracket to advance and no pool to rank, so draw
+        # resolution has nothing to do — and running it over a division that was
+        # never drawn is a class of surprise worth not having.
+        if division is not None and not is_casual_division(division):
             await refresh_statuses(session, division)
 
     events = await load_events(session, match.id)

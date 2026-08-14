@@ -25,11 +25,29 @@ async def _owned(session: SessionDep, player_id: str, user: CurrentUser) -> Play
 
 @router.get("", response_model=list[PlayerOut])
 async def list_players(
-    session: SessionDep, user: CurrentUser, search: str | None = None
+    session: SessionDep,
+    user: CurrentUser,
+    search: str | None = None,
+    include_guests: bool = False,
 ) -> list[Player]:
+    """The saved roster.
+
+    Guests — one-off names typed at the court for a pickup game — are excluded
+    unless asked for. They are real players with real ids, but the roster is
+    "people I play with", not "everyone who ever held a paddle", and a guest
+    appearing in a tournament entry picker would be a mistake waiting to happen.
+    """
     query = select(Player).where(Player.owner_id == user.id)
+    if not include_guests:
+        query = query.where(col(Player.is_guest).is_(False))
     if search:
         query = query.where(col(Player.name).ilike(f"%{search}%"))
+    if include_guests:
+        # Guests are picked again by recency ("that Mike, from last Tuesday"),
+        # not alphabetically.
+        return list(
+            (await session.exec(query.order_by(col(Player.created_at).desc()))).all()
+        )
     return list((await session.exec(query.order_by(col(Player.name)))).all())
 
 

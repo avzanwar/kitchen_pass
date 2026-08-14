@@ -1,10 +1,11 @@
 import { useQuery } from "@tanstack/react-query";
-import { Clock, LogOut, Trophy, Users } from "lucide-react";
+import { Clock, LogOut, Trophy, Users, Zap } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Link, Navigate, Route, Routes, useLocation, useNavigate } from "react-router-dom";
 
 import { Ball, Spinner, cx } from "./components/ui";
 import Auth from "./features/Auth";
+import CasualPlay from "./features/CasualPlay";
 import BulkImport from "./features/BulkImport";
 import DivisionDetail from "./features/DivisionDetail";
 import LiveMatch from "./features/LiveMatch";
@@ -17,6 +18,7 @@ import { pendingCount } from "./lib/outbox";
 
 const TABS = [
   { to: "/", label: "Events", icon: Trophy },
+  { to: "/play", label: "Play", icon: Zap },
   { to: "/players", label: "Players", icon: Users },
 ] as const;
 
@@ -106,6 +108,7 @@ export default function App() {
           <RequireAuth><LiveMatch /></RequireAuth>
         } />
         <Route path="/" element={<RequireAuth><Tournaments /></RequireAuth>} />
+        <Route path="/play" element={<RequireAuth><CasualPlay /></RequireAuth>} />
         <Route path="/players" element={<RequireAuth><Players /></RequireAuth>} />
         <Route path="/import" element={<RequireAuth><BulkImport /></RequireAuth>} />
         <Route path="/tournaments/:tournamentId" element={

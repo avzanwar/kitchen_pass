@@ -128,6 +128,10 @@ Keeps working with no signal.
 **Spectator** — a share link to live standings, brackets and the court board.
 No account, updates itself, exports to CSV.
 
+**Anyone with a court and four people** — the Play tab scores a one-off pickup
+game. Pick saved players or just type names, flip a coin, play. No tournament
+involved.
+
 ## Layout
 
 ```
@@ -138,6 +142,7 @@ server/
   app/draws/              draw generation, advancement, standings — also pure
   app/scheduling/         court assignment and conflict detection — also pure
   app/imports/            spreadsheet parsing, validation, template — also pure
+  app/services/casual_service.py   pickup games
   app/models.py           SQLModel tables
   app/api/v1/             auth, players, tournaments, divisions, scoring, courts,
                           public, imports
@@ -157,9 +162,9 @@ conformance/
 ## Testing
 
 ```bash
-cd server && uv run pytest              # 434 tests
+cd server && uv run pytest              # 458 tests
 cd server && uv run ruff check . && uv run mypy
-cd web    && npx vitest run             # 37 tests
+cd web    && npx vitest run             # 47 tests
 cd web    && npx tsc --noEmit
 cd web    && npm run e2e                # Playwright — needs the stack running
 ```
@@ -254,6 +259,33 @@ The template is generated from the same column definitions the parser accepts,
 so the two cannot drift, and a test asserts the CSV and Excel versions import
 identically. Its sample rows are a working tournament — download, upload, and
 you have an event to poke at.
+
+### A pickup game is a real match in a hidden container
+
+Four people turn up and want one game. That is not a tournament, but it is the
+same scoring problem — so rather than build a second scoring path, a casual
+match is a *real* `Match` and reuses everything: the engine, the offline outbox,
+undo, leases, the live feed, resume-after-closing-the-app.
+
+The shape that makes it work is one hidden `Tournament` per user
+(`kind="casual"`) holding **one `Division` per game**. A division per game is not
+a workaround: the settings a pickup game picks — format, scoring mode, target,
+win-by-2, best-of — are exactly the fields of `Division.match_config`, which is
+where the engine already reads them from. The alternative, making
+`Match.division_id` nullable, would put a null branch in every read path that
+walks Match → Division → Tournament to check ownership.
+
+Three filters are the entire reason "hidden" is true, and each is tested
+explicitly: the casual container is excluded from `GET /tournaments`, guests are
+excluded from `GET /players`, and guests are excluded from bulk-import name
+matching.
+
+**Typed names become guests, and every typed name is a new row.** Guests are
+real players with real ids — that is what keeps two people called "Mike" in
+separate serve-stat buckets, fixing the prototype's `keyOf` bug at
+`kitchen-pass.jsx:24` — but they stay out of the saved roster. Re-picking the
+same Mike is done from the "recent guests" strip, which is a deliberate act
+rather than a string coincidence.
 
 ### Draws resolve, they don't rebuild
 

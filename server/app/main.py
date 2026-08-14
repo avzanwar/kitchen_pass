@@ -19,6 +19,7 @@ from fastapi.staticfiles import StaticFiles
 
 from app.api.v1 import (
     auth,
+    casual,
     courts,
     divisions,
     imports,
@@ -88,6 +89,7 @@ def create_app() -> FastAPI:
     app.include_router(courts.router, prefix=api)
     app.include_router(public.router, prefix=api)
     app.include_router(imports.router, prefix=api)
+    app.include_router(casual.router, prefix=api)
 
     @app.get("/health", tags=["meta"])
     async def health() -> dict[str, str]:

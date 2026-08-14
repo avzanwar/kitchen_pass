@@ -74,6 +74,18 @@ class TournamentStatus(StrEnum):
     COMPLETE = "complete"
 
 
+class TournamentKind(StrEnum):
+    """What a tournament row is for.
+
+    `CASUAL` is the hidden per-user container that holds pickup games. It exists
+    so a one-off match can be a real Match — reusing the scoring, offline and
+    realtime stack unchanged — without appearing anywhere a real event would.
+    """
+
+    TOURNAMENT = "tournament"
+    CASUAL = "casual"
+
+
 class DivisionFormat(StrEnum):
     SINGLES = "singles"
     DOUBLES = "doubles"
@@ -138,6 +150,11 @@ class Player(SQLModel, table=True):
     avatar: dict[str, Any] | None = Field(default=None, sa_column=json_column())
     #: DUPR or club rating, when known. Used for seeding.
     rating: float | None = None
+    #: A one-off name typed at the court for a pickup game. Guests are real rows
+    #: with real ids — which is what keeps two players called "Mike" in separate
+    #: serve-stat buckets — but they are kept out of the saved roster and out of
+    #: name matching, so they never attach themselves to a tournament team.
+    is_guest: bool = Field(default=False, index=True)
     #: Set when this player has an account of their own.
     user_id: str | None = Field(
         default=None, foreign_key="users.id", ondelete="SET NULL", index=True
@@ -161,6 +178,7 @@ class Tournament(SQLModel, table=True):
     ends_on: str | None = None
     timezone: str = "UTC"
     status: TournamentStatus = Field(default=TournamentStatus.DRAFT)
+    kind: TournamentKind = Field(default=TournamentKind.TOURNAMENT, index=True)
     #: Unguessable token behind the public read-only standings page.
     public_token: str = Field(default_factory=new_id, index=True, unique=True)
     created_at: datetime = Field(

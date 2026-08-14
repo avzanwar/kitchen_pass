@@ -6,7 +6,7 @@ from fastapi import APIRouter, HTTPException
 from sqlmodel import col, func, select
 
 from app.api.deps import CurrentUser, OwnedTournament, SessionDep
-from app.models import Court, Tournament
+from app.models import Court, Tournament, TournamentKind
 from app.schemas import (
     CourtIn,
     CourtOut,
@@ -21,9 +21,14 @@ router = APIRouter(tags=["tournaments"])
 
 @router.get("/tournaments", response_model=list[TournamentOut])
 async def list_tournaments(session: SessionDep, user: CurrentUser) -> list[Tournament]:
+    # The casual container holds pickup games and is not an event; showing it
+    # here would put a tournament nobody created at the top of the list.
     query = (
         select(Tournament)
-        .where(Tournament.owner_id == user.id)
+        .where(
+            Tournament.owner_id == user.id,
+            Tournament.kind == TournamentKind.TOURNAMENT,
+        )
         .order_by(col(Tournament.created_at).desc())
     )
     return list((await session.exec(query)).all())

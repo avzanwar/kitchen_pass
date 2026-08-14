@@ -131,6 +131,41 @@ export interface Player {
   name: string;
   avatar?: Avatar | null;
   rating?: number | null;
+  /** A one-off name typed at the court, not a saved roster player. */
+  is_guest?: boolean;
+}
+
+/** One slot on a pickup team: a saved player, or a name typed at the court. */
+export type CasualSlot = { player_id: string } | { name: string };
+
+export interface CasualMatchSpec {
+  format: "doubles" | "singles";
+  scoring: "sideout" | "rally";
+  target: number;
+  best_of: 1 | 3 | 5;
+  win_by_2: boolean;
+  freeze_at?: number | null;
+  first_server: "A" | "B";
+  a: { players: CasualSlot[]; name?: string };
+  b: { players: CasualSlot[]; name?: string };
+}
+
+export interface CasualMatch {
+  match_id: string;
+  division_id: string;
+  status: string;
+  format: string;
+  scoring: string;
+  target: number;
+  best_of: number;
+  created_at: string;
+  a_name: string;
+  b_name: string;
+  a_players: Player[];
+  b_players: Player[];
+  winner: "A" | "B" | null;
+  games_won: Record<string, number>;
+  games: { a: number; b: number }[];
 }
 
 export interface Tournament {
@@ -341,7 +376,8 @@ export const api = {
     post<{ access_token: string }>("/auth/login", { email, password }),
   me: () => get<User>("/auth/me"),
 
-  players: () => get<Player[]>("/players"),
+  players: (includeGuests = false) =>
+    get<Player[]>(`/players${includeGuests ? "?include_guests=true" : ""}`),
   createPlayer: (body: Partial<Player>) => post<Player>("/players", body),
   updatePlayer: (id: string, body: Partial<Player>) => patch<Player>(`/players/${id}`, body),
   deletePlayer: (id: string) => del(`/players/${id}`),
@@ -392,6 +428,13 @@ export const api = {
     post<ImportPreview>("/imports/preview", importForm(file, target)),
   importCommit: (file: File, target: { tournamentId?: string; name?: string }) =>
     post<ImportResult>("/imports/commit", importForm(file, target)),
+
+  // Pickup games. There is deliberately no casual scoring endpoint: a pickup
+  // match is a real match, so it is scored through /matches/{id} like any other.
+  createCasualMatch: (spec: CasualMatchSpec) =>
+    post<CasualMatch>("/casual/matches", spec),
+  casualMatches: () => get<CasualMatch[]>("/casual/matches"),
+  deleteCasualMatch: (id: string) => del(`/casual/matches/${id}`),
 
   board: (tid: string) => get<Board>(`/tournaments/${tid}/board`),
   assignCourts: (tid: string, body: { division_id?: string; dry_run?: boolean; rest_waves?: number }) =>
