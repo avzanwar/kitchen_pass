@@ -12,11 +12,31 @@
   margin: 4px 0 14px;
 }
 
+/* The ported .topbar is a plain block, because the prototype stacked a brand
+   above a title. This layout puts the brand and the status chips on one row —
+   without it, `margin-left:auto` has nothing to push against and the sign-out
+   button wraps onto its own line. */
+.topbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
 .topbar-right {
   margin-left: auto;
   display: flex;
   align-items: center;
   gap: 8px;
+}
+
+/* Rows that are React Router <Link>s render as anchors and pick up the browser
+   default underline, which reads as broken on a card. */
+.app a.tourney-row,
+.app a.court-match,
+.app a.player-row,
+.app a.sched-row {
+  text-decoration: none;
+  color: inherit;
 }
 
 .chip-offline,
