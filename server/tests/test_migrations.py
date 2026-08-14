@@ -118,3 +118,75 @@ def test_sync_critical_constraints_are_declared(table, constraint):
         c.name for c in SQLModel.metadata.tables[table].constraints if c.name
     }
     assert constraint in names
+
+
+def _postgres_migration_sql() -> str:
+    """The SQL the whole migration chain emits for Postgres, without a server.
+
+    Alembic's offline mode renders DDL for a target dialect from the scripts
+    alone, which is the only way to inspect Postgres-specific schema decisions
+    from a suite that runs on SQLite.
+    """
+    import io
+    import os
+    from contextlib import redirect_stdout
+
+    from app.core.config import get_settings
+
+    previous = os.environ.get("KP_DATABASE_URL")
+    os.environ["KP_DATABASE_URL"] = "postgresql+psycopg://u:p@localhost/db"
+    get_settings.cache_clear()
+    try:
+        buffer = io.StringIO()
+        with redirect_stdout(buffer):
+            command.upgrade(
+                _alembic_config("postgresql+psycopg://u:p@localhost/db"),
+                "head",
+                sql=True,
+            )
+        return buffer.getvalue()
+    finally:
+        if previous is None:
+            os.environ.pop("KP_DATABASE_URL", None)
+        else:
+            os.environ["KP_DATABASE_URL"] = previous
+        get_settings.cache_clear()
+
+
+def _model_enum_type_names() -> set[str]:
+    import sqlalchemy as sa
+
+    names = set()
+    for table in SQLModel.metadata.sorted_tables:
+        for column in table.columns:
+            if isinstance(column.type, sa.Enum) and column.type.name:
+                names.add(column.type.name)
+    return names
+
+
+def test_every_enum_column_becomes_a_native_postgres_type():
+    """A Postgres-only failure mode that SQLite cannot show.
+
+    SQLModel maps an Enum field to a *native* Postgres enum, so every query
+    binds the parameter as `$1::thattype`. A migration that creates the column
+    as VARCHAR instead passes the whole SQLite suite and then fails in
+    deployment with `type "..." does not exist` — which is precisely what
+    a1c4e7b92f10 did to `tournaments.kind`.
+    """
+    sql = _postgres_migration_sql()
+    missing = [
+        name for name in sorted(_model_enum_type_names())
+        if f"CREATE TYPE {name}" not in sql and f"CREATE TYPE public.{name}" not in sql
+    ]
+    assert not missing, (
+        f"these enum types are never created for Postgres: {missing}. "
+        f"An enum column added as VARCHAR will fail at runtime with "
+        f'\'type "..." does not exist\'.'
+    )
+
+
+def test_the_tournament_kind_column_is_an_enum_on_postgres():
+    """The specific regression, pinned."""
+    sql = _postgres_migration_sql()
+    assert "CREATE TYPE tournamentkind" in sql
+    assert "TYPE tournamentkind" in sql
